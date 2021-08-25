@@ -1,0 +1,166 @@
+	
+
+
+
+
+
+-- Query that contain all info about Simulators finished
+ 
+    SELECT
+	simuladores.created as created,
+	(simuladores.start)::timestamp,
+	(simuladores.end)::timestamp,
+	simuladores.elapsed as seconds,
+	simuladores.email,
+	escuelas.nombre as school,
+	especialidades.nombre as UserSpeciality,
+	simuladores.id as idSimulador,
+	CASE
+		WHEN type IN(1,0) THEN 'Gratis'
+		WHEN type = 2 THEN 'Paga'
+	 END as simuladorType,
+	(simuladores.results ->> 'category')::text as category,
+	SUM((simuladores.results -> 'ok')::int) as aciertos,
+	SUM((simuladores.results -> 'total')::int) as total
+		 FROM (
+			SELECT
+			created,
+			id,
+			uid,
+			email,
+			type,
+			stats ->> 'start'as start,
+		    stats ->> 'end' as end,
+			jsonb_array_elements(stats -> 'results' -> 'totalResults') as results,
+			elapsed as elapsed
+			FROM sesiones 
+		  ) AS simuladores
+		LEFT JOIN usuarios as usr
+		ON usr.email = simuladores.email
+		LEFT JOIN escuelas
+		ON usr.school = escuelas.id
+		LEFT JOIN especialidades
+		ON usr.speciality = especialidades.id
+	  WHERE simuladores.results ->> 'category' NOT IN('Total')
+	  GROUP BY 1,2,3,4,5,6,7,8,9,10;
+	  
+	  
+	  
+	  
+    SELECT 
+	email,
+	id,
+	j ->> 'category' as especialidad,
+	j ->> 'ok' as aciertos,
+	j ->> 'total' as total
+	FROM (
+	SELECT
+	email,	
+	id,
+	jsonb_array_elements(data) as j
+	FROM (
+	SELECT
+	email,	
+	id,
+	stats -> 'results' -> 'totalResults' as data
+	FROM sesiones
+	WHERE email = 'israel@mellow.cc'
+		) AS test ) as test;
+
+		
+	
+	
+	SELECT
+	usuarios.created as registerDate,
+	usuarios.uid,
+	usuarios.email,
+	spe.nombre as especialidad,
+	escuelas.nombre as schoolName,
+	results.id as idSimulador,
+	results.simuladorType as type,
+	results.resultados ->> 'category' as especialidad,
+	results.resultados ->> 'ok' as aciertos,
+	results.resultados ->> 'total' as preguntas
+	FROM usuarios
+	LEFT JOIN escuelas
+	ON usuarios.school = escuelas.id
+	LEFT JOIN especialidades as spe
+	ON  usuarios.speciality = spe.id
+	LEFT JOIN (
+	SELECT
+    email,
+	id,
+	simuladorType,
+	jsonb_array_elements(data) as resultados
+	FROM (
+	SELECT
+	email,	
+	id,
+	type,
+	CASE
+		WHEN type = 1 THEN 'Gratis'
+		WHEN type = 2 THEN 'Paga'
+	END as simuladorType,
+	stats -> 'results' -> 'totalResults' as data
+	FROM sesiones
+	-- WHERE type = 2
+		) AS results
+	) as results
+	ON usuarios.email = results.email
+	WHERE resultados ->> 'category' NOT IN ('Total');
+		
+
+
+
+-- querry that contained all info about statistics of each institution
+
+SELECT
+school,
+COUNT( DISTINCT data.email) as registros,
+-- COUNT( DISTINCT CASE WHEN type = '1' THEN idSimulador END ) as free,
+COUNT( DISTINCT CASE WHEN type = '2' THEN idSimulador END ) as paid,
+COUNT( DISTINCT CASE WHEN type = '2' THEN results.email END ) as paidAlumnos,
+SUM((results.resultados ->> 'ok')::float) / SUM((results.resultados ->> 'total')::float) as Puntaje
+FROM (
+SELECT
+usuarios.uid as uid,
+usuarios.email as email,
+escuelas.nombre as school,
+sesiones.id as idSimulador,
+sesiones.type as type
+FROM usuarios
+LEFT JOIN escuelas
+	ON usuarios.school = escuelas.id
+LEFT JOIN sesiones
+ON usuarios.uid = sesiones.uid
+	) AS data
+ LEFT JOIN (
+	SELECT
+    email,
+	id,
+	simuladorType,
+	jsonb_array_elements(data) as resultados
+	FROM (
+	SELECT
+	email,	
+	id,
+	type,
+	CASE
+		WHEN type = 1 THEN 'Gratis'
+		WHEN type = 2 THEN 'Paga'
+	END as simuladorType,
+	stats -> 'results' -> 'totalResults' as data
+	FROM sesiones
+	-- WHERE type = 2
+		) AS results
+	) as results
+	ON data.email = results.email
+	WHERE resultados ->> 'category' NOT IN ('Total') 
+ GROUP BY 1;
+		
+
+
+SELECT * FROM sesiones_app;
+
+		
+		
